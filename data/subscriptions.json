@@ -1,0 +1,95 @@
+[
+  {
+    "id": "netflix",
+    "name": "Netflix Premium",
+    "category": "streaming",
+    "current_price": 24.99,
+    "billing_cycle": "monthly",
+    "next_renewal_date": "2026-09-14",
+    "auto_renew": true,
+    "last_used_days_ago": 2,
+    "price_history": [
+      { "date": "2025-09-14", "amount": 19.99 },
+      { "date": "2026-03-14", "amount": 22.99 },
+      { "date": "2026-09-14", "amount": 24.99 }
+    ],
+    "notes": "Watched regularly, whole household uses it."
+  },
+  {
+    "id": "fitpulse",
+    "name": "FitPulse Gym App",
+    "category": "fitness",
+    "current_price": 14.99,
+    "billing_cycle": "monthly",
+    "next_renewal_date": "2026-09-13",
+    "auto_renew": true,
+    "last_used_days_ago": 97,
+    "price_history": [
+      { "date": "2025-09-13", "amount": 14.99 },
+      { "date": "2026-09-13", "amount": 14.99 }
+    ],
+    "notes": "Signed up for a New Year's resolution."
+  },
+  {
+    "id": "cloudsafe",
+    "name": "CloudSafe Backup 2TB",
+    "category": "storage",
+    "current_price": 19.99,
+    "billing_cycle": "monthly",
+    "next_renewal_date": "2026-09-16",
+    "auto_renew": true,
+    "last_used_days_ago": 5,
+    "price_history": [
+      { "date": "2025-09-16", "amount": 9.99 },
+      { "date": "2026-03-16", "amount": 9.99 },
+      { "date": "2026-09-16", "amount": 19.99 }
+    ],
+    "notes": "Price doubled at last renewal."
+  },
+  {
+    "id": "newsplus",
+    "name": "NewsPlus Digital",
+    "category": "news",
+    "current_price": 8.0,
+    "billing_cycle": "monthly",
+    "next_renewal_date": "2026-10-05",
+    "auto_renew": true,
+    "last_used_days_ago": 3,
+    "price_history": [
+      { "date": "2025-10-05", "amount": 8.0 },
+      { "date": "2026-10-05", "amount": 8.0 }
+    ],
+    "notes": "Reads it most mornings."
+  },
+  {
+    "id": "mealkitco",
+    "name": "MealKitCo Weekly Box",
+    "category": "food",
+    "current_price": 79.99,
+    "billing_cycle": "monthly",
+    "next_renewal_date": "2026-09-12",
+    "auto_renew": true,
+    "last_used_days_ago": 61,
+    "price_history": [
+      { "date": "2025-09-12", "amount": 59.99 },
+      { "date": "2026-03-12", "amount": 69.99 },
+      { "date": "2026-09-12", "amount": 79.99 }
+    ],
+    "notes": "Stopped cooking from the boxes after starting a new job."
+  },
+  {
+    "id": "cloudide",
+    "name": "CloudIDE Pro",
+    "category": "software",
+    "current_price": 12.0,
+    "billing_cycle": "monthly",
+    "next_renewal_date": "2026-11-01",
+    "auto_renew": true,
+    "last_used_days_ago": 1,
+    "price_history": [
+      { "date": "2025-11-01", "amount": 12.0 },
+      { "date": "2026-11-01", "amount": 12.0 }
+    ],
+    "notes": "Used daily for work."
+  }
+]
