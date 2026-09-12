@@ -4,6 +4,8 @@
 
 Built for the [Agents for Humans Hackathon](https://agentsforhumans.devpost.com) — Everyday Agents track.
 
+![Architecture diagram](docs/architecture.png)
+
 ## The problem
 
 Everyone has 6-15 recurring subscriptions and bills. Prices creep up a dollar or two at a time, trials silently convert to paid plans, and gym memberships or meal kits renew for months after you've stopped using them. Nobody wants to open every account monthly and audit it by hand — so it just doesn't happen, and it quietly costs real money.

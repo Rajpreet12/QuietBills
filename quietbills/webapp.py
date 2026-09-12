@@ -11,6 +11,7 @@ unless something about it changes.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -20,6 +21,16 @@ import streamlit as st
 # package), so relative imports don't work -- put the project root on
 # sys.path and import absolutely instead.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# On Streamlit Community Cloud, config is set via the Secrets manager
+# (st.secrets) rather than shell env vars. The rest of this app is built
+# around os.environ, so mirror any secrets into the environment -- this
+# is a no-op locally if no secrets.toml exists.
+try:
+    for _key, _value in st.secrets.items():
+        os.environ.setdefault(_key, str(_value))
+except Exception:
+    pass
 
 from quietbills import data_store
 from quietbills.scan import run_scan
