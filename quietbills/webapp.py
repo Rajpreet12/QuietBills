@@ -11,11 +11,18 @@ unless something about it changes.
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
 
 import streamlit as st
 
-from . import data_store
-from .scan import run_scan
+# Streamlit runs this file standalone (not as part of the `quietbills`
+# package), so relative imports don't work -- put the project root on
+# sys.path and import absolutely instead.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from quietbills import data_store
+from quietbills.scan import run_scan
 
 logging.getLogger("strands").setLevel(logging.ERROR)
 
