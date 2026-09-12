@@ -73,7 +73,15 @@ export ANTHROPIC_API_KEY=sk-ant-...
 export QUIETBILLS_PROVIDER=anthropic
 ```
 
-**Option B — Amazon Bedrock** (default; needs an AWS account with Bedrock model access enabled and Claude models granted):
+**Option B — Groq** (fast, free-tier friendly, OpenAI-compatible endpoint):
+
+```bash
+export GROQ_API_KEY=gsk_...
+export QUIETBILLS_PROVIDER=groq
+# defaults to llama-3.3-70b-versatile; override with QUIETBILLS_MODEL_ID
+```
+
+**Option C — Amazon Bedrock** (default; needs an AWS account with Bedrock model access enabled and Claude models granted):
 
 ```bash
 export AWS_REGION=us-east-1

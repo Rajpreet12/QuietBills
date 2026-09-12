@@ -66,6 +66,19 @@ def _build_model():
             max_tokens=2048,
         )
 
+    if provider == "groq":
+        from strands.models.openai import OpenAIModel
+
+        model_id = os.environ.get("QUIETBILLS_MODEL_ID", "llama-3.3-70b-versatile")
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError("QUIETBILLS_PROVIDER=groq requires GROQ_API_KEY to be set.")
+        return OpenAIModel(
+            client_args={"api_key": api_key, "base_url": "https://api.groq.com/openai/v1"},
+            model_id=model_id,
+            params={"max_tokens": 2048},
+        )
+
     from strands.models import BedrockModel
 
     model_id = os.environ.get("QUIETBILLS_MODEL_ID", "us.anthropic.claude-sonnet-5")
