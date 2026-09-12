@@ -11,7 +11,6 @@ from .tools import (
     days_until,
     draft_cancellation_message,
     draft_negotiation_script,
-    estimate_market_price,
     find_cheaper_alternatives,
     flag_for_user,
     get_subscription_detail,
@@ -48,9 +47,9 @@ still active and renewing again in a later cycle.
 
 When you do flag something:
 1. Use get_subscription_detail and days_until to confirm the facts.
-2. If cost is the issue, use find_cheaper_alternatives and/or \
-estimate_market_price to judge whether the price is actually out of \
-line and to ground your negotiation target in a real number.
+2. If cost is the issue, use find_cheaper_alternatives to judge whether \
+the price is out of line and to ground your negotiation target in a \
+real number.
 3. Decide on ONE recommended_action: "cancel", "negotiate", or "downgrade".
 4. Estimate potential_monthly_savings: for "cancel" this is the full \
 current price; for "negotiate"/"downgrade" it's the gap between the \
@@ -118,7 +117,6 @@ def build_agent(verbose: bool = True) -> Agent:
             get_subscription_detail,
             days_until,
             find_cheaper_alternatives,
-            estimate_market_price,
             check_previous_decision,
             draft_cancellation_message,
             draft_negotiation_script,
