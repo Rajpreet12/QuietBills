@@ -1,45 +1,45 @@
 """Command-line entry point for QuietBills.
 
-    python -m quietbills.cli scan   Run the agent over all tracked subscriptions.
-                                     Only prints something for subscriptions
-                                     that need a real decision.
-    python -m quietbills.cli chat   Ask QuietBills questions in a REPL.
+    python -m quietbills.cli scan             Run the agent over all tracked
+                                               subscriptions. Only prints
+                                               something for subscriptions
+                                               that need a real decision.
+    python -m quietbills.cli decide <id> <approve|dismiss>
+                                               Record what you decided about
+                                               a flagged subscription, so the
+                                               next scan doesn't re-flag it
+                                               unless something changes.
+    python -m quietbills.cli chat             Ask QuietBills questions in a
+                                               REPL.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
 
 from . import data_store
 from .agent import build_agent
+from .scan import run_scan as _run_scan
 
 logging.getLogger("strands").setLevel(logging.ERROR)
 
 
 def run_scan() -> None:
-    agent = build_agent(verbose=False)
     subs = data_store.load_subscriptions()
-
     print(f"QuietBills is reviewing {len(subs)} subscriptions...\n")
 
-    for sub in subs:
-        prompt = (
-            f"Review subscription '{sub.id}' ({sub.name}) and decide whether "
-            f"it needs to be flagged for the user. Use your tools to check "
-            f"its details, then either call flag_for_user or do nothing."
-        )
-        agent(prompt)
-
-    log = data_store.read_decision_log()
+    log = _run_scan()
     flagged_ids = {e["subscription_id"] for e in log}
 
     if not flagged_ids:
         print("Everything looks normal. No decisions needed today.")
         return
 
-    print(f"{len(flagged_ids)} of {len(subs)} subscriptions need your input:\n")
+    total_savings = sum(e.get("potential_monthly_savings", 0.0) for e in log)
+
+    print(f"{len(flagged_ids)} of {len(subs)} subscriptions need your input:")
+    print(f"Potential savings if you act on all of them: ${total_savings:,.2f}/month\n")
     print("=" * 60)
     for entry in log:
         if entry["subscription_id"] not in flagged_ids:
@@ -49,9 +49,23 @@ def run_scan() -> None:
         print(f"\n[{name}]")
         print(f"  Why: {entry['reason']}")
         print(f"  Recommended: {entry['recommended_action']}")
+        savings = entry.get("potential_monthly_savings", 0.0)
+        if savings:
+            print(f"  Potential savings: ${savings:,.2f}/month")
         if entry.get("draft_text"):
             print(f"  Draft ready:\n    " + entry["draft_text"].replace("\n", "\n    "))
+        print(f"  -> To act on this: python -m quietbills.cli decide {entry['subscription_id']} approve")
+        print(f"     To leave it for now: python -m quietbills.cli decide {entry['subscription_id']} dismiss")
     print("\n" + "=" * 60)
+
+
+def run_decide(subscription_id: str, decision: str) -> None:
+    if decision not in ("approve", "dismiss"):
+        print('Decision must be "approve" or "dismiss".')
+        sys.exit(1)
+    status = "approved" if decision == "approve" else "dismissed"
+    data_store.record_user_decision(subscription_id, status)
+    print(f"Recorded: {subscription_id} -> {status}")
 
 
 def run_chat() -> None:
@@ -70,14 +84,19 @@ def run_chat() -> None:
 
 
 def main() -> None:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("scan", "chat"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("scan", "chat", "decide"):
         print(__doc__)
         sys.exit(1)
 
-    # Reset the decision log for a fresh scan each run.
-    if sys.argv[1] == "scan":
-        data_store.DECISIONS_FILE.write_text(json.dumps([]))
+    command = sys.argv[1]
+
+    if command == "scan":
         run_scan()
+    elif command == "decide":
+        if len(sys.argv) != 4:
+            print("Usage: python -m quietbills.cli decide <subscription_id> <approve|dismiss>")
+            sys.exit(1)
+        run_decide(sys.argv[2], sys.argv[3])
     else:
         run_chat()
 

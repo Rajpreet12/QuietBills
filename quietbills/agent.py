@@ -7,9 +7,11 @@ import os
 from strands import Agent
 
 from .tools import (
+    check_previous_decision,
     days_until,
     draft_cancellation_message,
     draft_negotiation_script,
+    estimate_market_price,
     find_cheaper_alternatives,
     flag_for_user,
     get_subscription_detail,
@@ -32,15 +34,31 @@ Do NOT flag a subscription just because it renews soon if it is being \
 used normally and its price is stable -- that is exactly the kind of \
 routine renewal that should stay quiet.
 
+Before doing anything else, call check_previous_decision. Its status \
+field controls what you do next:
+- status is missing, or "pending": the user hasn't acted on this yet, so \
+flag it again if it still meets the criteria above -- an unresolved \
+decision should keep surfacing, that's not nagging.
+- status is "dismissed": the user already saw this and chose to leave it \
+alone. Stay silent UNLESS the situation has materially worsened (a \
+bigger price hike, still unused much later).
+- status is "approved": the user already decided to act (e.g. cancel). \
+Assume they're handling it -- stay silent unless the subscription is \
+still active and renewing again in a later cycle.
+
 When you do flag something:
 1. Use get_subscription_detail and days_until to confirm the facts.
-2. If cost is the issue, use find_cheaper_alternatives to see if there's \
-a cheaper option worth mentioning.
+2. If cost is the issue, use find_cheaper_alternatives and/or \
+estimate_market_price to judge whether the price is actually out of \
+line and to ground your negotiation target in a real number.
 3. Decide on ONE recommended_action: "cancel", "negotiate", or "downgrade".
-4. Draft the actual text the user would need (draft_cancellation_message \
+4. Estimate potential_monthly_savings: for "cancel" this is the full \
+current price; for "negotiate"/"downgrade" it's the gap between the \
+current price and the cheaper target you found.
+5. Draft the actual text the user would need (draft_cancellation_message \
 for a cancellation, draft_negotiation_script for a negotiation call) and \
 pass it as draft_text.
-5. Call flag_for_user exactly once per subscription that needs a decision.
+6. Call flag_for_user exactly once per subscription that needs a decision.
 
 For every other subscription, do nothing -- do not call flag_for_user, \
 do not narrate that you checked it. Silence is the correct output for a \
@@ -77,7 +95,7 @@ def _build_model():
             client_args={"api_key": api_key, "base_url": "https://api.groq.com/openai/v1"},
             model_id=model_id,
             stream=False,
-            params={"max_tokens": 2048},
+            params={"max_tokens": 4096},
         )
 
     from strands.models import BedrockModel
@@ -100,6 +118,8 @@ def build_agent(verbose: bool = True) -> Agent:
             get_subscription_detail,
             days_until,
             find_cheaper_alternatives,
+            estimate_market_price,
+            check_previous_decision,
             draft_cancellation_message,
             draft_negotiation_script,
             flag_for_user,

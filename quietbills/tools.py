@@ -7,6 +7,7 @@ up or draft text for a human to send.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 from strands import tool
@@ -109,7 +110,74 @@ def draft_negotiation_script(subscription_name: str, current_price: float, targe
 
 
 @tool
-def flag_for_user(subscription_id: str, reason: str, recommended_action: str, draft_text: str = "") -> str:
+def check_previous_decision(subscription_id: str) -> dict:
+    """Check whether this subscription was already reviewed and what the
+    user decided last time (approved the recommendation, or dismissed it
+    for now). Use this BEFORE flag_for_user so you don't re-flag something
+    the user already dismissed unless the situation has materially
+    changed (e.g. an even bigger price hike, or it's still unused much
+    later).
+
+    Args:
+        subscription_id: The id of the subscription to check.
+    """
+    state = data_store.get_decision_state(subscription_id)
+    if state is None:
+        return {"previously_reviewed": False}
+    return {"previously_reviewed": True, **state}
+
+
+@tool
+def estimate_market_price(category: str, subscription_name: str, current_price: float) -> dict:
+    """Reason about whether current_price is above typical market rate for
+    this category, using general knowledge of common competitors and
+    pricing. This is a best-effort estimate from the model's own
+    knowledge, not a live price-comparison search.
+
+    Args:
+        category: The subscription's category (e.g. "streaming", "storage").
+        subscription_name: The subscription's display name.
+        current_price: What the user currently pays per month.
+    """
+    try:
+        from .agent import _build_model
+        from strands import Agent as _Agent
+
+        judge = _Agent(
+            model=_build_model(),
+            system_prompt=(
+                "You estimate typical market pricing for subscription "
+                "categories from general knowledge. Reply with ONLY a "
+                'compact JSON object: {"typical_low_price": <number>, '
+                '"typical_high_price": <number>, "note": "<one short '
+                'sentence>"}. No other text.'
+            ),
+            callback_handler=None,
+        )
+        result = judge(
+            f"Category: {category}. Service: {subscription_name}. "
+            f"Current price: ${current_price:.2f}/month. What's the "
+            f"typical price range for comparable services?"
+        )
+        text = str(result)
+        start, end = text.find("{"), text.rfind("}")
+        return json.loads(text[start : end + 1])
+    except Exception:
+        return {
+            "typical_low_price": round(current_price * 0.7, 2),
+            "typical_high_price": round(current_price * 0.95, 2),
+            "note": "Estimate unavailable; using a generic 5-30% band below current price.",
+        }
+
+
+@tool
+def flag_for_user(
+    subscription_id: str,
+    reason: str,
+    recommended_action: str,
+    potential_monthly_savings: float = 0.0,
+    draft_text: str = "",
+) -> str:
     """Surface a subscription to the user because it needs a real decision
     (a price hike, an unused renewal, or a due date with no clear default).
     This is the ONLY tool that produces user-visible output -- everything
@@ -119,6 +187,8 @@ def flag_for_user(subscription_id: str, reason: str, recommended_action: str, dr
         subscription_id: The id of the subscription being flagged.
         reason: One or two sentences explaining why this needs a decision.
         recommended_action: What the agent recommends (e.g. "cancel", "negotiate", "let it renew").
+        potential_monthly_savings: Your best estimate of $/month saved if the user acts on this
+            (full price for a cancel, the price difference for a negotiate/downgrade).
         draft_text: Optional drafted email/script the user can act on directly.
     """
     entry = {
@@ -126,7 +196,9 @@ def flag_for_user(subscription_id: str, reason: str, recommended_action: str, dr
         "status": "flagged",
         "reason": reason,
         "recommended_action": recommended_action,
+        "potential_monthly_savings": potential_monthly_savings,
         "draft_text": draft_text,
     }
     data_store.append_decision_log(entry)
+    data_store.record_flag(subscription_id, reason, recommended_action, potential_monthly_savings)
     return f"Flagged {subscription_id} for user review."

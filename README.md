@@ -18,24 +18,26 @@ The fix isn't "another dashboard to check." It's an agent that does the checking
 
 ## How it works
 
-QuietBills is a [Strands Agents](https://strandsagents.com/) agent with seven narrow tools. It reviews each tracked subscription and reasons about whether it crosses one of three thresholds:
+QuietBills is a [Strands Agents](https://strandsagents.com/) agent with nine narrow tools. It reviews each tracked subscription and reasons about whether it crosses one of three thresholds:
 
 - **Price hike** — the upcoming renewal price is meaningfully higher than recent history.
 - **Unused renewal** — no use in 45+ days and a renewal is coming up.
 - **Time-sensitive** — renewal within 3 days combined with either of the above.
 
-If none of those apply, the agent does nothing — no notification, no log entry, no noise. If one does, it looks up cheaper alternatives, decides on a recommendation (cancel / negotiate / downgrade), drafts the actual email or phone script, and surfaces just that one decision to the user.
+If none of those apply, the agent does nothing — no notification, no log entry, no noise. If one does, it checks whether you've already seen this exact issue before, looks up cheaper alternatives, decides on a recommendation (cancel / negotiate / downgrade), estimates the dollar impact, drafts the actual email or phone script, and surfaces just that one decision to the user.
 
 ```mermaid
 flowchart TD
     A[Subscription feed<br/>bank export / email receipts] --> B(QuietBills Agent<br/>Strands Agents SDK)
-    B --> C{list_subscriptions<br/>get_subscription_detail<br/>days_until}
-    C --> D{Needs a<br/>real decision?}
-    D -- No --> E[Stay silent]
-    D -- Yes --> F[find_cheaper_alternatives]
-    F --> G[draft_cancellation_message /<br/>draft_negotiation_script]
-    G --> H[flag_for_user]
-    H --> I[User reviews & approves<br/>the drafted action]
+    B --> C{check_previous_decision}
+    C -- already dismissed, unchanged --> E[Stay silent]
+    C -- new or worsened --> D{list_subscriptions<br/>get_subscription_detail<br/>days_until}
+    D --> F{Needs a<br/>real decision?}
+    F -- No --> E
+    F -- Yes --> G[find_cheaper_alternatives /<br/>estimate_market_price]
+    G --> H[draft_cancellation_message /<br/>draft_negotiation_script]
+    H --> I[flag_for_user<br/>+ potential_monthly_savings]
+    I --> J[User approves or dismisses<br/>-- remembered next scan]
 ```
 
 ### Tools
@@ -45,14 +47,28 @@ flowchart TD
 | `list_subscriptions` | Enumerate everything being tracked |
 | `get_subscription_detail` | Full price history for one subscription |
 | `days_until` | Days remaining until a date, for renewal urgency |
-| `find_cheaper_alternatives` | Look up cheaper options in the same category |
+| `check_previous_decision` | Recall whether this was already flagged/approved/dismissed, so nothing gets re-nagged |
+| `find_cheaper_alternatives` | Look up cheaper options in the same category (static reference set) |
+| `estimate_market_price` | A second, LLM-reasoned opinion on whether the price is above typical market rate |
 | `draft_cancellation_message` | Write a ready-to-send cancellation email |
 | `draft_negotiation_script` | Write a retention-call script |
-| `flag_for_user` | The *only* tool that produces user-visible output — surfacing a decision |
+| `flag_for_user` | The *only* tool that produces user-visible output — surfacing a decision with an estimated dollar impact |
 
 Everything except `flag_for_user` is silent bookkeeping. The agent's system prompt (see [`quietbills/agent.py`](quietbills/agent.py)) instructs it to call `flag_for_user` only when a subscription genuinely needs a human decision, and to do nothing otherwise — the "quiet by default" behavior is a prompted policy enforced by the tool boundary, not a UI filter bolted on afterward.
 
+Each subscription is reviewed by its own fresh agent instance, so one subscription's tool-call hiccup can't derail the rest of the scan, and reasoning about one subscription never bleeds into another.
+
 In this demo, the subscription feed is a local JSON file ([`data/subscriptions.json`](data/subscriptions.json)) standing in for a real bank/email export — swapping `data_store.load_subscriptions()` for a live connector (Plaid, Gmail receipt parsing, etc.) is the only change needed to move from demo data to a real feed.
+
+### Memory across runs
+
+Every flag is written to `data/decision_state.json`, keyed by subscription. When you record a decision:
+
+```bash
+python -m quietbills.cli decide cloudsafe approve   # or: dismiss
+```
+
+the next scan won't re-flag that exact issue unless it's gotten worse (bigger price hike, still unused much later). Dismissing something is a real decision to leave it alone for now, not a bug to be nagged about again tomorrow.
 
 ## Setup
 
@@ -78,7 +94,7 @@ export QUIETBILLS_PROVIDER=anthropic
 ```bash
 export GROQ_API_KEY=gsk_...
 export QUIETBILLS_PROVIDER=groq
-# defaults to llama-3.3-70b-versatile; override with QUIETBILLS_MODEL_ID
+# defaults to openai/gpt-oss-120b; override with QUIETBILLS_MODEL_ID
 ```
 
 **Option C — Amazon Bedrock** (default; needs an AWS account with Bedrock model access enabled and Claude models granted):
@@ -101,6 +117,12 @@ python -m quietbills.cli chat
 ```
 
 Ask QuietBills questions directly, e.g. "which of my subscriptions went up in price this year?"
+
+```bash
+streamlit run quietbills/webapp.py
+```
+
+A small dashboard: every subscription, flagged ones expanded with the reason and draft, a total potential monthly savings figure, and Approve/Dismiss buttons that feed the memory described above.
 
 ## Tests
 

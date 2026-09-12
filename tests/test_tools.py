@@ -5,14 +5,16 @@ access.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from quietbills import data_store
 from quietbills.tools import (
+    check_previous_decision,
     days_until,
     draft_cancellation_message,
     draft_negotiation_script,
@@ -23,9 +25,13 @@ from quietbills.tools import (
 )
 
 
-def setup_function(_):
-    if data_store.DECISIONS_FILE.exists():
-        data_store.DECISIONS_FILE.unlink()
+@pytest.fixture(autouse=True)
+def isolate_data_files(tmp_path, monkeypatch):
+    """Tests must never touch the real data/decisions_log.json or
+    data/decision_state.json -- those hold the live app's state. Redirect
+    both to a scratch directory for the duration of each test."""
+    monkeypatch.setattr(data_store, "DECISIONS_FILE", tmp_path / "decisions_log.json")
+    monkeypatch.setattr(data_store, "DECISION_STATE_FILE", tmp_path / "decision_state.json")
 
 
 def test_list_subscriptions_returns_all_mock_entries():
@@ -80,6 +86,7 @@ def test_flag_for_user_writes_to_decision_log():
         subscription_id="fitpulse",
         reason="Unused for 97 days and about to renew.",
         recommended_action="cancel",
+        potential_monthly_savings=14.99,
         draft_text="Subject: Cancel...",
     )
     assert "fitpulse" in result
@@ -88,3 +95,34 @@ def test_flag_for_user_writes_to_decision_log():
     assert len(log) == 1
     assert log[0]["subscription_id"] == "fitpulse"
     assert log[0]["recommended_action"] == "cancel"
+    assert log[0]["potential_monthly_savings"] == 14.99
+
+
+def test_check_previous_decision_unseen_subscription():
+    result = check_previous_decision(subscription_id="fitpulse")
+    assert result == {"previously_reviewed": False}
+
+
+def test_flag_for_user_records_decision_state_as_pending():
+    flag_for_user(
+        subscription_id="fitpulse",
+        reason="Unused for 97 days.",
+        recommended_action="cancel",
+        potential_monthly_savings=14.99,
+    )
+    result = check_previous_decision(subscription_id="fitpulse")
+    assert result["previously_reviewed"] is True
+    assert result["status"] == "pending"
+
+
+def test_record_user_decision_updates_state():
+    flag_for_user(
+        subscription_id="fitpulse",
+        reason="Unused for 97 days.",
+        recommended_action="cancel",
+    )
+    data_store.record_user_decision("fitpulse", "dismissed")
+
+    result = check_previous_decision(subscription_id="fitpulse")
+    assert result["status"] == "dismissed"
+    assert "decided_at" in result

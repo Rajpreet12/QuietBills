@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/decisions_log.json
+data/decision_state.json
 .env
