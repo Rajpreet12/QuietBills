@@ -9,14 +9,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 
 from . import data_store
 from .agent import build_agent
 
+logging.getLogger("strands").setLevel(logging.ERROR)
+
 
 def run_scan() -> None:
-    agent = build_agent()
+    agent = build_agent(verbose=False)
     subs = data_store.load_subscriptions()
 
     print(f"QuietBills is reviewing {len(subs)} subscriptions...\n")

@@ -69,13 +69,14 @@ def _build_model():
     if provider == "groq":
         from strands.models.openai import OpenAIModel
 
-        model_id = os.environ.get("QUIETBILLS_MODEL_ID", "llama-3.3-70b-versatile")
+        model_id = os.environ.get("QUIETBILLS_MODEL_ID", "openai/gpt-oss-120b")
         api_key = os.environ.get("GROQ_API_KEY")
         if not api_key:
             raise RuntimeError("QUIETBILLS_PROVIDER=groq requires GROQ_API_KEY to be set.")
         return OpenAIModel(
             client_args={"api_key": api_key, "base_url": "https://api.groq.com/openai/v1"},
             model_id=model_id,
+            stream=False,
             params={"max_tokens": 2048},
         )
 
@@ -86,8 +87,10 @@ def _build_model():
     return BedrockModel(model_id=model_id, region_name=region)
 
 
-def build_agent() -> Agent:
+def build_agent(verbose: bool = True) -> Agent:
     model = _build_model()
+
+    kwargs = {} if verbose else {"callback_handler": None}
 
     return Agent(
         model=model,
@@ -101,4 +104,5 @@ def build_agent() -> Agent:
             draft_negotiation_script,
             flag_for_user,
         ],
+        **kwargs,
     )
