@@ -4,9 +4,22 @@ from __future__ import annotations
 
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import data_store
 from .agent import build_agent
+
+MAX_CONCURRENT_REVIEWS = 4
+
+
+def _review(sub) -> None:
+    prompt = (
+        f"Review subscription '{sub.id}' ({sub.name}) and decide whether "
+        f"it needs to be flagged for the user. Use your tools to check "
+        f"its details, then either call flag_for_user or do nothing."
+    )
+    agent = build_agent(verbose=False)
+    agent(prompt)
 
 
 def run_scan() -> list[dict]:
@@ -16,25 +29,24 @@ def run_scan() -> list[dict]:
     across runs on purpose, so previously dismissed items aren't repeated
     unless something changed.
 
-    Each subscription gets its own fresh agent so one review can't bleed
-    context (or token budget) into the next, and a failure reviewing one
-    subscription (a flaky model response, a transient API error) doesn't
-    abort the rest of the scan.
+    Each subscription gets its own fresh agent, reviewed concurrently
+    (bounded by MAX_CONCURRENT_REVIEWS) so one review can't bleed context
+    into another and the whole scan doesn't wait on each API call in
+    sequence. A failure reviewing one subscription (a flaky model
+    response, a transient API error) is isolated and doesn't abort the
+    rest of the scan.
     """
     data_store.DECISIONS_FILE.write_text(json.dumps([]))
 
     subs = data_store.load_subscriptions()
 
-    for sub in subs:
-        prompt = (
-            f"Review subscription '{sub.id}' ({sub.name}) and decide whether "
-            f"it needs to be flagged for the user. Use your tools to check "
-            f"its details, then either call flag_for_user or do nothing."
-        )
-        try:
-            agent = build_agent(verbose=False)
-            agent(prompt)
-        except Exception as exc:
-            print(f"  (skipped {sub.id}: {exc})", file=sys.stderr)
+    with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REVIEWS) as pool:
+        futures = {pool.submit(_review, sub): sub for sub in subs}
+        for future in as_completed(futures):
+            sub = futures[future]
+            try:
+                future.result()
+            except Exception as exc:
+                print(f"  (skipped {sub.id}: {exc})", file=sys.stderr)
 
     return data_store.read_decision_log()

@@ -10,6 +10,7 @@ to production feed.
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,6 +20,12 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SUBSCRIPTIONS_FILE = DATA_DIR / "subscriptions.json"
 DECISIONS_FILE = DATA_DIR / "decisions_log.json"
 DECISION_STATE_FILE = DATA_DIR / "decision_state.json"
+
+# Subscriptions are reviewed concurrently (see scan.py), and each review
+# can write to DECISIONS_FILE / DECISION_STATE_FILE. This lock serializes
+# those read-modify-write file operations so concurrent flags don't race
+# and clobber each other.
+_FILE_LOCK = threading.Lock()
 
 
 def load_subscriptions() -> list[Subscription]:
@@ -35,11 +42,12 @@ def get_subscription(subscription_id: str) -> Subscription | None:
 
 def append_decision_log(entry: dict) -> None:
     entry = {**entry, "logged_at": datetime.now(timezone.utc).isoformat()}
-    log = []
-    if DECISIONS_FILE.exists():
-        log = json.loads(DECISIONS_FILE.read_text())
-    log.append(entry)
-    DECISIONS_FILE.write_text(json.dumps(log, indent=2))
+    with _FILE_LOCK:
+        log = []
+        if DECISIONS_FILE.exists():
+            log = json.loads(DECISIONS_FILE.read_text())
+        log.append(entry)
+        DECISIONS_FILE.write_text(json.dumps(log, indent=2))
 
 
 def read_decision_log() -> list[dict]:
@@ -66,26 +74,28 @@ def get_decision_state(subscription_id: str) -> dict | None:
 
 
 def record_flag(subscription_id: str, reason: str, recommended_action: str, potential_monthly_savings: float) -> None:
-    state = _read_decision_state()
-    state[subscription_id] = {
-        "status": "pending",
-        "reason": reason,
-        "recommended_action": recommended_action,
-        "potential_monthly_savings": potential_monthly_savings,
-        "flagged_at": datetime.now(timezone.utc).isoformat(),
-    }
-    _write_decision_state(state)
+    with _FILE_LOCK:
+        state = _read_decision_state()
+        state[subscription_id] = {
+            "status": "pending",
+            "reason": reason,
+            "recommended_action": recommended_action,
+            "potential_monthly_savings": potential_monthly_savings,
+            "flagged_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _write_decision_state(state)
 
 
 def record_user_decision(subscription_id: str, decision: str) -> None:
     """decision is 'approved' (user will act on the recommendation) or
     'dismissed' (user has seen it and chose to leave it as-is for now)."""
-    state = _read_decision_state()
-    entry = state.get(subscription_id, {})
-    entry["status"] = decision
-    entry["decided_at"] = datetime.now(timezone.utc).isoformat()
-    state[subscription_id] = entry
-    _write_decision_state(state)
+    with _FILE_LOCK:
+        state = _read_decision_state()
+        entry = state.get(subscription_id, {})
+        entry["status"] = decision
+        entry["decided_at"] = datetime.now(timezone.utc).isoformat()
+        state[subscription_id] = entry
+        _write_decision_state(state)
 
 
 def list_decision_states() -> dict:
