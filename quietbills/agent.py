@@ -78,7 +78,7 @@ def _build_model():
                 "QUIETBILLS_PROVIDER=anthropic requires ANTHROPIC_API_KEY to be set."
             )
         return AnthropicModel(
-            client_args={"api_key": api_key},
+            client_args={"api_key": api_key, "timeout": 60.0},
             model_id=model_id,
             max_tokens=2048,
         )
@@ -91,7 +91,12 @@ def _build_model():
         if not api_key:
             raise RuntimeError("QUIETBILLS_PROVIDER=groq requires GROQ_API_KEY to be set.")
         return OpenAIModel(
-            client_args={"api_key": api_key, "base_url": "https://api.groq.com/openai/v1"},
+            client_args={
+                "api_key": api_key,
+                "base_url": "https://api.groq.com/openai/v1",
+                "timeout": 60.0,
+                "max_retries": 0,  # we handle retries ourselves in scan.py
+            },
             model_id=model_id,
             stream=False,
             params={"max_tokens": 4096},
