@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from strands.types.exceptions import ModelThrottledException
 
 from . import data_store
 from .agent import build_agent
 
-MAX_CONCURRENT_REVIEWS = 4
+# Free-tier model APIs (e.g. Groq) cap tokens-per-minute, not just
+# tokens-per-day, so too much concurrency here trips a 429 mid-scan. Keep
+# this modest -- it still parallelizes meaningfully without blowing past
+# a typical ~8k TPM free-tier limit.
+MAX_CONCURRENT_REVIEWS = 2
+MAX_THROTTLE_RETRIES = 3
 
 
 def _review(sub) -> None:
@@ -19,7 +27,15 @@ def _review(sub) -> None:
         f"its details, then either call flag_for_user or do nothing."
     )
     agent = build_agent(verbose=False)
-    agent(prompt)
+
+    for attempt in range(1, MAX_THROTTLE_RETRIES + 1):
+        try:
+            agent(prompt)
+            return
+        except ModelThrottledException:
+            if attempt == MAX_THROTTLE_RETRIES:
+                raise
+            time.sleep(2 * attempt)
 
 
 def run_scan() -> list[dict]:
